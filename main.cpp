@@ -1,9 +1,9 @@
 #include <iostream>
 #include "ProducerConsumer.h"
 
-//8000 потоков обрабытывают 256000 чисел +- за 43сек
+// 8000 потоков обрабытывают 256000 чисел +- за 43сек
 int main(int argc, char** argv) {
-  if (argc < 3){
+  if (argc < 3) {
     std::cout << "Wrong arguments count" << std::endl;
     return 1;
   }

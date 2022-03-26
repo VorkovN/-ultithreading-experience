@@ -4,24 +4,20 @@
 #include <pthread.h>
 #include <cstdlib>
 
-struct ConsumerRoutineArgs
-{
+struct ConsumerRoutineArgs {
   uint* uRandomSleepTime;
   int* term;
   int* sum;
 };
 
-struct ConsumerInterruptorRoutineArgs
-{
+struct ConsumerInterruptorRoutineArgs {
   size_t threadsCount;
   pthread_t* threads;
 };
 
-struct ProducerRoutineArgs
-{
+struct ProducerRoutineArgs {
   int* term;
 };
-
 
 int runThreads(uint consumerThreadsCount, uint maxSleepTime);
 
