@@ -13,7 +13,6 @@ struct ConsumerRoutineArgs
 
 struct ConsumerInterruptorRoutineArgs
 {
-  uint* uRandomSleepTime;
   size_t threadsCount;
   pthread_t* threads;
 };
@@ -34,6 +33,6 @@ void* consumerInterruptorRoutine(void* args);
 
 uint generateuRandomSleepTime(uint maxSleepTime);
 
-int getTid();
+uint getTid();
 
 #endif

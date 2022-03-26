@@ -3,13 +3,14 @@
 #include <csignal>
 #include <iostream>
 #include <vector>
+#include <queue>
 
-// можно было обойтись и без DECREMENT_MUTEX, но тогда код был бы менее
-// читабельным
+// можно было обойтись и без DECREMENT_MUTEX, но тогда код был бы менее читабельным
 pthread_cond_t CV_CONSUMER = PTHREAD_COND_INITIALIZER;
 pthread_cond_t CV_PRODUICER = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t TERM_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t SUM_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t TIDS_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t DECREMENT_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t READY_CONSUMERS_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 bool producerIsAlive = false;
@@ -27,8 +28,7 @@ int runThreads(uint consumerThreadsCount, uint maxSleepTime) {
   for (int i = 0; i < consumerThreadsCount; ++i) {
     uRandomSleepTime = generateuRandomSleepTime(maxSleepTime);
     consumerArgs = ConsumerRoutineArgs{&uRandomSleepTime, &term, &sum};
-    pthread_create(&consumerThreads[i], nullptr, consumerRoutine,
-                   &consumerArgs);
+    pthread_create(&consumerThreads[i], nullptr, consumerRoutine, &consumerArgs);
     pthread_detach(consumerThreads[i]);
     ++aliveConsumersCount;
   }
@@ -46,10 +46,8 @@ int runThreads(uint consumerThreadsCount, uint maxSleepTime) {
   // Interrupter creation
   pthread_t interruptor;
   uRandomSleepTime = generateuRandomSleepTime(maxSleepTime);
-  auto interruptorArgs = ConsumerInterruptorRoutineArgs{
-      &uRandomSleepTime, consumerThreads.size(), consumerThreads.data()};
-  pthread_create(&interruptor, nullptr, consumerInterruptorRoutine,
-                 &interruptorArgs);
+  auto interruptorArgs = ConsumerInterruptorRoutineArgs{consumerThreads.size(), consumerThreads.data()};
+  pthread_create(&interruptor, nullptr, consumerInterruptorRoutine, &interruptorArgs);
   pthread_join(interruptor, NULL);
 
   pthread_cond_destroy(&CV_PRODUICER);
@@ -62,6 +60,7 @@ int runThreads(uint consumerThreadsCount, uint maxSleepTime) {
 void* consumerRoutine(void* args) {
   auto* consumerRoutineArgs = static_cast<ConsumerRoutineArgs*>(args);
   pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, nullptr);
+  thread_local int psum;
 
   while (true) {
     pthread_mutex_lock(&TERM_MUTEX);
@@ -87,12 +86,15 @@ void* consumerRoutine(void* args) {
       break;
     }
 
-    pthread_mutex_lock(&SUM_MUTEX);
-    (*consumerRoutineArgs->sum) += term;
-    pthread_mutex_unlock(&SUM_MUTEX);
+    psum += term;
 
+    std::cout << "(" << getTid() << ", " << psum << ")" << std::endl;
     usleep(*consumerRoutineArgs->uRandomSleepTime);
   }
+
+  pthread_mutex_lock(&SUM_MUTEX);
+  (*consumerRoutineArgs->sum) += psum;
+  pthread_mutex_unlock(&SUM_MUTEX);
   return nullptr;
 }
 
@@ -134,9 +136,11 @@ void* consumerInterruptorRoutine(void* args) {
       static_cast<ConsumerInterruptorRoutineArgs*>(args);
 
   while (aliveConsumersCount > 0) {
-    //    for (int i = 0; i < consumerInterruptorRoutineArgs->threadsCount; ++i)
-    //      pthread_cancel(consumerInterruptorRoutineArgs->threads[i]);
-    usleep(*consumerInterruptorRoutineArgs->uRandomSleepTime);
+    if (producerIsAlive){
+      int randomThreadId = rand() % consumerInterruptorRoutineArgs->threadsCount;
+      pthread_cancel(consumerInterruptorRoutineArgs->threads[randomThreadId]);
+    }
+    usleep(10);
   }
   return nullptr;
 }
@@ -146,8 +150,17 @@ uint generateuRandomSleepTime(uint maxSleepTime) {
   return (rand() % maxSleepTime + 2 + 1) * 1000;
 }
 
-int getTid() {
-  // 1 to 3+N thread ID
-  thread_local static int* tid;
+uint getTid() {
+  thread_local static uint* tid;
+  static std::queue<uint> tids;
+
+  pthread_mutex_lock(&TIDS_MUTEX);
+  if (tid == nullptr)
+  {
+    tids.push(tids.size()+1);
+    tid=&tids.back();
+  }
+  pthread_mutex_unlock(&TIDS_MUTEX);
+
   return *tid;
 }
