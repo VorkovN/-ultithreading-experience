@@ -88,7 +88,9 @@ void* consumerRoutine(void* args) {
 
     psum += term;
 
+#ifndef NDEBUG
     std::cout << "(" << getTid() << ", " << psum << ")" << std::endl;
+#endif
     usleep(*consumerRoutineArgs->uRandomSleepTime);
   }
 
