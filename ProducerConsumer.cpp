@@ -25,7 +25,7 @@ int runThreads(uint consumerThreadsCount, uint maxSleepTime) {
   // Consumer creation
   std::vector<pthread_t> consumerThreads(consumerThreadsCount);
   ConsumerRoutineArgs consumerArgs{};
-  for (int i = 0; i < consumerThreadsCount; ++i) {
+  for (uint i = 0; i < consumerThreadsCount; ++i) {
     uRandomSleepTime = generateuRandomSleepTime(maxSleepTime);
     consumerArgs = ConsumerRoutineArgs{&uRandomSleepTime, &term, &sum};
     pthread_create(&consumerThreads[i], nullptr, consumerRoutine, &consumerArgs);
@@ -48,7 +48,7 @@ int runThreads(uint consumerThreadsCount, uint maxSleepTime) {
   uRandomSleepTime = generateuRandomSleepTime(maxSleepTime);
   auto interruptorArgs = ConsumerInterruptorRoutineArgs{consumerThreads.size(), consumerThreads.data()};
   pthread_create(&interruptor, nullptr, consumerInterruptorRoutine, &interruptorArgs);
-  pthread_join(interruptor, NULL);
+  pthread_join(interruptor, nullptr);
 
   pthread_cond_destroy(&CV_PRODUICER);
   pthread_cond_destroy(&CV_CONSUMER);
