@@ -2,7 +2,6 @@
 
 #include <unistd.h>
 #include <csignal>
-//#include <ctime>
 #include <iostream>
 #include <queue>
 #include <vector>
@@ -13,9 +12,6 @@ pthread_cond_t CV_CONSUMER = PTHREAD_COND_INITIALIZER;
 pthread_cond_t CV_PRODUICER = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t TERM_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t SUM_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t TIDS_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t DECREMENT_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t READY_CONSUMERS_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 bool producerIsAlive = false;
 uint readyConsumersCount = 0;
 uint aliveConsumersCount = 0;
@@ -45,7 +41,6 @@ int runThreads(uint consumerThreadsCount, uint maxSleepTime) {
   pthread_create(&producer, nullptr, producerRoutine, &producerArgs);
   pthread_detach(producer);
   producerIsAlive = true;
-  sleep(1);
 
   // Interrupter creation
   pthread_t interruptor;
@@ -60,9 +55,6 @@ int runThreads(uint consumerThreadsCount, uint maxSleepTime) {
   pthread_cond_destroy(&CV_PRODUICER);
   pthread_mutex_destroy(&TERM_MUTEX);
   pthread_mutex_destroy(&SUM_MUTEX);
-  pthread_mutex_destroy(&TIDS_MUTEX);
-  pthread_mutex_destroy(&DECREMENT_MUTEX);
-  pthread_mutex_destroy(&READY_CONSUMERS_MUTEX);
 
   return sum;
 }
@@ -74,39 +66,25 @@ void* consumerRoutine(void* args) {
 
   while (true) {
     pthread_mutex_lock(&TERM_MUTEX);
-
-    pthread_mutex_lock(&READY_CONSUMERS_MUTEX);
     ++readyConsumersCount;
-    pthread_mutex_unlock(&READY_CONSUMERS_MUTEX);
-
     pthread_cond_wait(&CV_CONSUMER, &TERM_MUTEX);
-    //    uint start_consumer = clock();
-
-    pthread_mutex_lock(&READY_CONSUMERS_MUTEX);
     --readyConsumersCount;
-    pthread_mutex_unlock(&READY_CONSUMERS_MUTEX);
 
     if (!producerIsAlive) {
-      pthread_mutex_lock(&DECREMENT_MUTEX);
       --aliveConsumersCount;
-      pthread_mutex_unlock(&DECREMENT_MUTEX);
-
       pthread_mutex_unlock(&TERM_MUTEX);
       break;
     }
 
     psum += *(consumerRoutineArgs->term);
     pthread_cond_signal(&CV_PRODUICER);
-    pthread_mutex_unlock(&TERM_MUTEX);
 
     // only for gcc
     //#ifndef NDEBUG
     //    std::cout << "(" << getTid() << ", " << psum << ")" << std::endl;
     //#endif
+    pthread_mutex_unlock(&TERM_MUTEX);
 
-    //    uint stop_consumer = clock();
-    //    std::cout << "consumer time: " << stop_consumer - start_consumer
-    //              << std::endl;
     usleep(*consumerRoutineArgs->uRandomSleepTime);
   }
 
@@ -118,7 +96,6 @@ void* consumerRoutine(void* args) {
 
 void* producerRoutine(void* args) {
   auto producerRoutineArgs = static_cast<ProducerRoutineArgs*>(args);
-  //  uint start_produicer = clock();
   while (true) {
     //костыль, для гарантии, что хоть один консьюмер будет готов к
     // pthread_cond_signal
@@ -146,9 +123,6 @@ void* producerRoutine(void* args) {
   pthread_mutex_lock(&TERM_MUTEX);
   pthread_cond_broadcast(&CV_CONSUMER);
   pthread_mutex_unlock(&TERM_MUTEX);
-  //  uint stop_produicer = clock();
-  //  std::cout << "produicer time: " << stop_produicer - start_produicer
-  //            << std::endl;
   return nullptr;
 }
 
@@ -176,12 +150,10 @@ uint getTid() {
   thread_local static uint* tid;
   static std::queue<uint> tids;
 
-  pthread_mutex_lock(&TIDS_MUTEX);
   if (tid == nullptr) {
     tids.push(tids.size() + 1);
     tid = &tids.back();
   }
-  pthread_mutex_unlock(&TIDS_MUTEX);
 
   return *tid;
 }
