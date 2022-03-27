@@ -86,16 +86,18 @@ void* consumerRoutine(void* args) {
     --readyConsumersCount;
     pthread_mutex_unlock(&READY_CONSUMERS_MUTEX);
 
-    psum += *(consumerRoutineArgs->term);
-    pthread_cond_signal(&CV_PRODUICER);
-    pthread_mutex_unlock(&TERM_MUTEX);
-
     if (!producerIsAlive) {
       pthread_mutex_lock(&DECREMENT_MUTEX);
       --aliveConsumersCount;
       pthread_mutex_unlock(&DECREMENT_MUTEX);
+
+      pthread_mutex_unlock(&TERM_MUTEX);
       break;
     }
+
+    psum += *(consumerRoutineArgs->term);
+    pthread_cond_signal(&CV_PRODUICER);
+    pthread_mutex_unlock(&TERM_MUTEX);
 
     // only for gcc
     //#ifndef NDEBUG
