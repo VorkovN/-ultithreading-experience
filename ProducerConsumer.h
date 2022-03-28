@@ -19,7 +19,7 @@ struct ProducerRoutineArgs {
   int* term;
 };
 
-int runThreads(uint consumerThreadsCount, uint maxSleepTime);
+int runThreads(uint consumerThreadsCount, uint maxSleepTime, bool debugMode);
 
 void* consumerRoutine(void* args);
 

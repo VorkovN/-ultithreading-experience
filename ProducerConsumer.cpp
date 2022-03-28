@@ -12,11 +12,14 @@ pthread_cond_t CV_CONSUMER = PTHREAD_COND_INITIALIZER;
 pthread_cond_t CV_PRODUICER = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t TERM_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t SUM_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+bool debug = false;
 bool producerIsAlive = false;
 uint readyConsumersCount = 0;
 uint aliveConsumersCount = 0;
 
-int runThreads(uint consumerThreadsCount, uint maxSleepTime) {
+int runThreads(uint consumerThreadsCount, uint maxSleepTime, bool debugMode) {
+  if (debugMode) debug = true;
+
   int term = 0;
   int sum = 0;
   uint uRandomSleepTime;
@@ -36,7 +39,6 @@ int runThreads(uint consumerThreadsCount, uint maxSleepTime) {
 
   // Produicer creation
   pthread_t producer;
-  uRandomSleepTime = generateuRandomSleepTime(maxSleepTime);
   auto producerArgs = ProducerRoutineArgs{&term};
   pthread_create(&producer, nullptr, producerRoutine, &producerArgs);
   pthread_detach(producer);
@@ -44,7 +46,6 @@ int runThreads(uint consumerThreadsCount, uint maxSleepTime) {
 
   // Interrupter creation
   pthread_t interruptor;
-  uRandomSleepTime = generateuRandomSleepTime(maxSleepTime);
   auto interruptorArgs = ConsumerInterruptorRoutineArgs{consumerThreads.size(),
                                                         consumerThreads.data()};
   pthread_create(&interruptor, nullptr, consumerInterruptorRoutine,
@@ -66,6 +67,9 @@ void* consumerRoutine(void* args) {
 
   while (true) {
     pthread_mutex_lock(&TERM_MUTEX);
+
+    if (readyConsumersCount == 0) pthread_cond_signal(&CV_PRODUICER);
+
     ++readyConsumersCount;
     pthread_cond_wait(&CV_CONSUMER, &TERM_MUTEX);
     --readyConsumersCount;
@@ -76,20 +80,21 @@ void* consumerRoutine(void* args) {
       break;
     }
 
-    psum += *(consumerRoutineArgs->term);
+    psum += *consumerRoutineArgs->term;
     pthread_cond_signal(&CV_PRODUICER);
 
-    // only for gcc
-    //#ifndef NDEBUG
-    //    std::cout << "(" << getTid() << ", " << psum << ")" << std::endl;
-    //#endif
+    static int counter = 1;
+    if (debug)
+      std::cout << counter++ << "(" << getTid() << ", " << psum << ")"
+                << std::endl;
+
     pthread_mutex_unlock(&TERM_MUTEX);
 
     usleep(*consumerRoutineArgs->uRandomSleepTime);
   }
 
   pthread_mutex_lock(&SUM_MUTEX);
-  (*consumerRoutineArgs->sum) += psum;
+  *consumerRoutineArgs->sum += psum;
   pthread_mutex_unlock(&SUM_MUTEX);
   return nullptr;
 }
@@ -97,15 +102,10 @@ void* consumerRoutine(void* args) {
 void* producerRoutine(void* args) {
   auto producerRoutineArgs = static_cast<ProducerRoutineArgs*>(args);
   while (true) {
-    //костыль, для гарантии, что хоть один консьюмер будет готов к
-    // pthread_cond_signal
-    if (readyConsumersCount == 0) {
-      usleep(100);
-      continue;
-    }
-
     pthread_mutex_lock(&TERM_MUTEX);
-    if (!(std::cin >> *(producerRoutineArgs->term))) {
+    if (readyConsumersCount == 0) pthread_cond_wait(&CV_PRODUICER, &TERM_MUTEX);
+
+    if (!(std::cin >> *producerRoutineArgs->term)) {
       producerIsAlive = false;
       pthread_mutex_unlock(&TERM_MUTEX);
       break;
@@ -115,9 +115,6 @@ void* producerRoutine(void* args) {
     pthread_mutex_unlock(&TERM_MUTEX);
   }
 
-  //можно конечно проверять потоки на готовность словить broadcast и в случае
-  //неготовности немного подождать,
-  // но для данной задачи sleep(1) более чем достаточно
   sleep(1);
 
   pthread_mutex_lock(&TERM_MUTEX);

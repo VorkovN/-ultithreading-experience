@@ -18,13 +18,6 @@ TEST_CASE("TestFull") {
   CHECK(sum == 3114160);
 }
 
-// TEST_CASE("TestRunThreads") {
-//   uint threadsCount = 1000;
-//   uint maxSleepTime = 10;
-//   int sum = runThreads(threadsCount, maxSleepTime);
-//   CHECK(sum == 3114160);
-// }
-
 TEST_CASE("TestGetTid") {
   std::set<int> tids;
   for (int i = 1; i <= 20; ++i) {
