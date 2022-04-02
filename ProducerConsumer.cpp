@@ -5,6 +5,7 @@
 #include <iostream>
 #include <queue>
 #include <vector>
+#include <memory>
 
 // можно было обойтись и без DECREMENT_MUTEX, но тогда код был бы менее
 // читабельным
@@ -144,13 +145,11 @@ uint generateuRandomSleepTime(uint maxSleepTime) {
 }
 
 uint getTid() {
-  thread_local static uint* tid;
-  static std::queue<uint> tids;
+  static uint tidsCounter = 1;
+  thread_local std::unique_ptr<uint> tid;
 
-  if (tid == nullptr) {
-    tids.push(tids.size() + 1);
-    tid = &tids.back();
-  }
+  if (tid == nullptr)
+    tid = std::make_unique<uint>(tidsCounter++);
 
   return *tid;
 }
