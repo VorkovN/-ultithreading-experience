@@ -5,8 +5,8 @@
 #include <cstdlib>
 
 struct ConsumerRoutineArgs {
-  uint* uRandomSleepTime;
-  int* term;
+  uint* mMaxRandomSleepTime;
+  int* term = nullptr;
   int* sum;
 };
 
@@ -19,7 +19,7 @@ struct ProducerRoutineArgs {
   int* term;
 };
 
-int runThreads(uint consumerThreadsCount, uint maxSleepTime, bool debugMode);
+int runThreads(uint consumerThreadsCount, uint mMaxSleepTime, bool debugMode);
 
 void* consumerRoutine(void* args);
 
