@@ -8,14 +8,14 @@ TEST_CASE("TestFull") {
   int buildResult = system("make all");
   if (buildResult == -1) std::cout << "make fail" << std::endl;
 
-  char cmd[] = "./posix 500 10 < ./tests/test_data.txt | tail -n 1";
+  char cmd[] = "./posix 100 10 < ./tests/test_data.txt | tail -n 1";
   FILE* file = popen(cmd, "r");
   if (file == nullptr) return;
   int sum = 0;
   int result = fscanf(file, "%i", &sum);
   if (result == -1) std::cout << "file scaning error" << std::endl;
 
-  CHECK(sum == 3114160);
+  CHECK(sum == 26637);
 }
 
 TEST_CASE("TestGetTid") {
