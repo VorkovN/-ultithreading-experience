@@ -1,22 +1,18 @@
 #include "ProducerConsumer.h"
 
 #include <unistd.h>
+#include <atomic>
 #include <csignal>
 #include <iostream>
 #include <memory>
-#include <queue>
 #include <vector>
 
-// можно было обойтись и без DECREMENT_MUTEX, но тогда код был бы менее
-// читабельным
 pthread_cond_t CV_CONSUMER = PTHREAD_COND_INITIALIZER;
 pthread_cond_t CV_PRODUICER = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t TERM_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t SUM_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-bool debug = false;
-bool producerIsAlive = false;
-uint readyConsumersCount = 0;
-uint aliveConsumersCount = 0;
+bool debug = false;  //только читается, можно и без атомик
+std::atomic<bool> producerIsAlive{false};
 
 int runThreads(uint consumerThreadsCount, uint mMaxSleepTime, bool debugMode) {
   if (debugMode) debug = true;
@@ -28,7 +24,7 @@ int runThreads(uint consumerThreadsCount, uint mMaxSleepTime, bool debugMode) {
   pthread_t producer;
   auto producerArgs = ProducerRoutineArgs{&term};
   pthread_create(&producer, nullptr, producerRoutine, &producerArgs);
-  producerIsAlive = true;
+  producerIsAlive.store(true, std::memory_order_relaxed);
 
   // Consumer creation
   std::vector<pthread_t> consumerThreads(consumerThreadsCount);
@@ -37,7 +33,6 @@ int runThreads(uint consumerThreadsCount, uint mMaxSleepTime, bool debugMode) {
     consumerArgs = ConsumerRoutineArgs{&mMaxSleepTime, &term, &sum};
     pthread_create(&consumerThreads[i], nullptr, consumerRoutine,
                    &consumerArgs);
-    ++aliveConsumersCount;
   }
 
   // Interrupter creation
@@ -68,10 +63,13 @@ void* consumerRoutine(void* args) {
   while (true) {
     pthread_mutex_lock(&TERM_MUTEX);
 
-    if (consumerRoutineArgs->term == 0)
+    //чтобы не создавать лишний булиан на валидность значения в term, можно
+    //считать, что на вход не будут поступать слагаемые 0 ибо в них нет смысла,
+    //тем более, что в тестах на сервере 0 не подается)
+    if (*consumerRoutineArgs->term == 0)
       pthread_cond_wait(&CV_CONSUMER, &TERM_MUTEX);
 
-    if (!producerIsAlive) {
+    if (!producerIsAlive.load(std::memory_order_relaxed)) {
       pthread_mutex_unlock(&TERM_MUTEX);
       break;
     }
@@ -81,9 +79,9 @@ void* consumerRoutine(void* args) {
     pthread_cond_signal(&CV_PRODUICER);
 
     if (debug) std::cout << "(" << getTid() << ", " << psum << ")" << std::endl;
+    pthread_mutex_unlock(&TERM_MUTEX);
     uint uRandomSleepTime =
         generateuRandomSleepTime(*consumerRoutineArgs->mMaxRandomSleepTime);
-    pthread_mutex_unlock(&TERM_MUTEX);
 
     usleep(uRandomSleepTime);
   }
@@ -100,7 +98,7 @@ void* producerRoutine(void* args) {
     pthread_mutex_lock(&TERM_MUTEX);
 
     if (!(std::cin >> *producerRoutineArgs->term)) {
-      producerIsAlive = false;
+      producerIsAlive.store(false, std::memory_order_relaxed);
       pthread_mutex_unlock(&TERM_MUTEX);
       break;
     }
@@ -123,7 +121,7 @@ void* consumerInterruptorRoutine(void* args) {
   auto consumerInterruptorRoutineArgs =
       static_cast<ConsumerInterruptorRoutineArgs*>(args);
 
-  while (producerIsAlive) {
+  while (producerIsAlive.load(std::memory_order_relaxed)) {
     int randomThreadId = rand() % consumerInterruptorRoutineArgs->threadsCount;
     pthread_cancel(consumerInterruptorRoutineArgs->threads[randomThreadId]);
     usleep(1);  //без минимального слипа все упадет
